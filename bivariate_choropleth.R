@@ -2,15 +2,9 @@
 # Author: Lance R. Owen 
 # Date: 7 June 2022
 
-library(biscale)
-library(tidycensus)
-library(geojsonR)
-library(leaflet)
-library(rgdal)
-library(geojsonio)
-library(sf)
-library(ggplot2)
-library(cowplot)
+
+pacman::p_load(biscale, tidycensus, geojsonR, leaflet, rgdal, geojsonio, sf, ggplot2, cowplot)
+
 
 # Import TopoJSON and set CRS
 SVI_2018 <- topojson_read("https://raw.githubusercontent.com/lancerowen23/bivariate_choropleth/main/SVI2018_US_county.json") 
