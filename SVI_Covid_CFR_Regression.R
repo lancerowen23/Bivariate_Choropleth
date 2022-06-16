@@ -1,0 +1,69 @@
+# Multilevel Correlations between overall COVID-19 case fatality rates and SVI Rankings
+# Author: Lance R. Owen
+# Date: June 16, 2022
+
+pacman::p_load(geojsonio, sf, tidyverse, broom)
+
+cases <- read.csv('C:/Users/psx8/Downloads/covid_confirmed_usafacts.csv') %>% 
+  select(countyFIPS, County.Name, State, X2022.06.14) %>% 
+  filter(!County.Name == "Statewide Unallocated")
+deaths <- read.csv('C:/Users/psx8/Downloads/covid_deaths_usafacts.csv') %>% 
+  select(countyFIPS, X2022.06.14)%>% 
+  filter(!countyFIPS == 0)
+
+cfr <- left_join(cases, deaths, by='countyFIPS') %>% 
+  filter(!X2022.06.14.x == 0) %>% # drop counties with 0 cases to avoid dividing by zero
+  mutate(cfr = 100*X2022.06.14.y/X2022.06.14.x)
+
+#add census regions and divisions
+reg_div <- read.csv('\\\\cdc.gov\\project\\ATS_GIS_Store4\\Projects\\prj06286_SVI_Intentional_Fatal_Injury_Associations\\Data\\census_region_divisions.csv',
+                    stringsAsFactors = TRUE, fileEncoding="UTF-8-BOM")
+
+cfr_reg <- merge(cfr, reg_div, by.x = "State", by.y = 'st_abbr')
+
+# Import TopoJSON and set CRS
+SVI_2018 <- topojson_read("https://raw.githubusercontent.com/lancerowen23/bivariate_choropleth/main/SVI2018_US_county.json") 
+SVI_2018 <-  st_set_crs(SVI_2018, "EPSG:4326")
+SVI_2018_Albers <-SVI_2018 %>% st_transform(5070)
+
+# SUBSET THEMES
+svi_themes <- SVI_2018 %>% 
+  select(FIPS, RPL_THEME1, RPL_THEME2, RPL_THEME3, RPL_THEME4, RPL_THEMES) %>% 
+  filter(!RPL_THEMES == -999)
+
+# FIX LEADING ZERO ON FIPS
+cfr$countyFIPS <- str_pad(as.character(cfr$countyFIPS), 5, pad = "0")
+
+svi_themes_cft <- merge(svi_themes, cfr_reg, by.x = "FIPS", by.y = "countyFIPS")
+
+# Linear Regression by State
+lm_cfr_state <- svi_themes_cft %>% 
+  group_by(State) %>% 
+  do(tidy(lm(cfr ~ RPL_THEMES, data = .))) %>% 
+  filter(term == "RPL_THEMES") %>% 
+  arrange(desc(estimate))
+
+# Linear Regression by Division
+lm_cfr_div <- svi_themes_cft %>% 
+  group_by(div) %>% 
+  do(tidy(lm(cfr ~ RPL_THEMES, data = .))) %>% 
+  filter(term == "RPL_THEMES") %>% 
+  arrange(desc(estimate))
+
+# Linear Regression by Region
+lm_cfr_reg <- svi_themes_cft %>% 
+  group_by(reg) %>% 
+  do(tidy(lm(cfr ~ RPL_THEMES, data = .))) %>% 
+  filter(term == "RPL_THEMES") %>% 
+  arrange(desc(estimate))
+
+#Linear Regression with no Levels
+lm_cfr_overall <- lm(cfr ~ RPL_THEMES, data = svi_themes_cft)
+summary(lm_cfr_overall)
+
+#Georgia
+svi_themes_cft_ga <- svi_themes_cft %>% 
+  filter(name == "Georgia")
+lm_cfr_overall_ga <- lm(cfr ~ RPL_THEMES, data = svi_themes_cft_ga)
+summary(lm_cfr_overall_ga)
+
